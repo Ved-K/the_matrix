@@ -1,0 +1,16 @@
+teacher_id,full_name,slack_user_id,employment_type,primary_campus,campuses,subjects,year_levels,availability_weekly,teaching_hours,max_covers_per_week
+T001,Ved Khanolkar,U01VK,CASUAL,chatswood,parramatta|strathfield,MAT|MADV|MX1,9|10|11|12,Mon:13:00-19:30;Wed:13:00-19:30;Sat:09:00-16:00;Sun:09:00-13:00,14,4
+T002,Vipul Chiluvery,U01VC,CASUAL,epping,strathfield,MAT|MAS,7|8|9|10|11|12,Tue:13:00-19:30;Thu:13:00-19:30;Sat:09:00-19:10,10,5
+T003,Vedant Chanpura,U02VC,FULL_TIME,parramatta,strathfield|chatswood,MADV|MX1|MX2,11|12,Mon:13:00-19:10;Tue:13:00-19:10;Wed:13:00-19:10;Sun:09:00-16:00,18,2
+T004,Sooraj Vijayakrishnan,U01SV,CASUAL,parramatta,epping,MAT,7|8|9|10,Wed:14:30-19:10;Fri:13:00-19:10;Sun:09:00-17:00,7.5,6
+T005,Ann Berly,U01AB,FULL_TIME,parramatta,chatswood|strathfield,MAT|MADV,8|9|10|11|12,Mon:16:10-19:10;Thu:16:10-19:10;Sat:10:30-16:00;Sun:10:30-13:00,12,3
+T006,Kalp Panchal,U01KP,CASUAL,parramatta,parramatta|epping,MAT|MAS,7|8|9|10|11|12,Tue:13:00-19:30;Thu:13:00-19:30;Sat:09:00-16:00,9,5
+T007,Nishad Jhuvar,U01NJ,PART_TIME,strathfield,strathfield|chatswood,MAT|MADV|MX1,9|10|11|12,Mon:16:10-19:10;Wed:16:10-19:10;Sat:10:30-16:00;Sun:11:00-16:00,12,4
+T008,Chelsea Lima,U01CL,CASUAL,chatswood,chatswood|strathfield|epping,MAT,7|8|9|10,Mon:14:30-19:10;Fri:13:00-19:10;Sun:09:00-13:30,8,6
+T009,Ricky Purani,U01RP,FULL_TIME,epping,epping|parramatta|strathfield|chatswood,MADV|MX1|MX2,11|12,Mon:13:00-19:10;Tue:13:00-19:10;Thu:13:00-19:10;Sat:10:30-16:00,18,2
+T010,Savindi Ramasundara,U01SR,PART_TIME,parramatta,parramatta|strathfield|chatswood,MAT|MADV|MAS,8|9|10|11|12,Tue:16:10-19:10;Thu:16:10-19:10;Sat:09:00-13:30;Sun:13:00-16:00,13.5,4
+T011,Anuk Ramasundara,U01AR,CASUAL,parramatta,parramatta|epping,MAT|MAS,7|8|9|10|11|12,Tue:13:00-19:30;Thu:13:00-19:30;Sat:09:00-16:00,9,5
+T012,Ryan Suhardjo,U01RS,PART_TIME,strathfield,strathfield|chatswood,MAT|MADV|MX1,9|10|11|12,Mon:16:10-19:10;Wed:16:10-19:10;Sat:10:30-16:00;Sun:11:00-16:00,12,4
+T013,Juvette Concepcion,U01JC,CASUAL,chatswood,chatswood|strathfield|epping,MAT,7|8|9|10,Mon:14:30-19:10;Fri:13:00-19:10;Sun:09:00-13:30,8,6
+T014,Junette Concepcion,U02JC,FULL_TIME,epping,epping|parramatta|strathfield|chatswood,MADV|MX1|MX2,11|12,Mon:13:00-19:10;Tue:13:00-19:10;Thu:13:00-19:10;Sat:10:30-16:00,18,2
+T015,Kimberley Nguyen,U01KN,PART_TIME,parramatta,parramatta|strathfield|chatswood,MAT|MADV|MAS,8|9|10|11|12,Tue:16:10-19:10;Thu:16:10-19:10;Sat:09:00-13:30;Sun:13:00-16:00,13.5,4
