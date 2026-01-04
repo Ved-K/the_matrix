@@ -1,6 +1,6 @@
 teacher_id,full_name,slack_user_id,employment_type,primary_campus,campuses,subjects,year_levels,availability_weekly,teaching_hours,max_covers_per_week
-T001,Ved Khanolkar,U01VK,CASUAL,chatswood,chatswood|parramatta|strathfield,MAT|MADV|MX1,9|10|11|12,Mon:13:00-19:30;Wed:13:00-19:30;Sat:09:00-16:00;Sun:09:00-13:00,14,4
-T002,Vipul Chiluvery,U01VC,CASUAL,epping,epping|strathfield,MAT|MAS,7|8|9|10|11|12,Tue:13:00-19:30;Thu:13:00-19:30;Sat:09:00-19:10,10,5
+T001,Ved Khanolkar,U0A6RV7B4R2,CASUAL,chatswood,chatswood|parramatta|strathfield,MAT|MADV|MX1,9|10|11|12,Mon:13:00-19:30;Wed:13:00-19:30;Sat:09:00-16:00;Sun:09:00-13:00,14,4
+T002,Vipul Chiluvery,U0A6G0N7W2X,CASUAL,epping,epping|strathfield,MAT|MAS,7|8|9|10|11|12,Tue:13:00-19:30;Thu:13:00-19:30;Sat:09:00-19:10,10,5
 T003,Vedant Chanpura,U02VC,FULL_TIME,parramatta,parramatta|strathfield|chatswood,MADV|MX1|MX2,11|12,Mon:13:00-19:10;Tue:13:00-19:10;Wed:13:00-19:10;Sun:09:00-16:00,18,2
 T004,Sooraj Vijayakrishnan,U01SV,CASUAL,parramatta,parramatta|epping,MAT,7|8|9|10,Wed:14:30-19:10;Fri:13:00-19:10;Sun:09:00-17:00,7.5,6
 T005,Ann Berly,U01AB,FULL_TIME,parramatta,parramatta|chatswood|strathfield|epping,MAT|MADV,8|9|10|11|12,Mon:16:10-19:10;Thu:16:10-19:10;Sat:10:30-16:00;Sun:8:30-19:00,12,3

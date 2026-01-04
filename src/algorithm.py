@@ -115,7 +115,7 @@ def capability_reasons(teacher: Teacher, c: ClassSession) -> list[str]:
 def clash_reasons(
     teacher_id: str,
     c: ClassSession,
-    regular_classes_by_teacher: dict[str, list[ClassSession]],
+    busy_sessions_by_teacher: dict[str, list[ClassSession]],
 ) -> list[str]:
     """
     Clash check against the teacher's regular timetable.
@@ -123,7 +123,7 @@ def clash_reasons(
     """
     reasons: list[str] = []
 
-    busy = regular_classes_by_teacher.get(teacher_id, [])
+    busy = busy_sessions_by_teacher.get(teacher_id, [])
     for b in busy:
         # If this is the same class_id (rare), ignore.
         if b.class_id == c.class_id:
@@ -152,25 +152,25 @@ def availability_reasons(teacher: Teacher, c: ClassSession) -> list[str]:
 def eligibility_reasons(
     teacher: Teacher,
     c: ClassSession,
-    regular_classes_by_teacher: dict[str, list[ClassSession]],
+    busy_sessions_by_teacher: dict[str, list[ClassSession]],
 ) -> list[str]:
     reasons: list[str] = []
     reasons += capability_reasons(teacher, c)
     reasons += availability_reasons(teacher, c)
-    reasons += clash_reasons(teacher.teacher_id, c, regular_classes_by_teacher)
+    reasons += clash_reasons(teacher.teacher_id, c, busy_sessions_by_teacher)
     return reasons
 
 
 def eligible_teachers_for_class(
     teachers_by_id: dict[str, Teacher],
     c: ClassSession,
-    regular_classes_by_teacher: dict[str, list[ClassSession]],
+    busy_sessions_by_teacher: dict[str, list[ClassSession]],
 ) -> tuple[list[str], dict[str, list[str]]]:
     eligible: list[str] = []
     rejected: dict[str, list[str]] = {}
 
     for t in teachers_by_id.values():
-        reasons = eligibility_reasons(t, c, regular_classes_by_teacher)
+        reasons = eligibility_reasons(t, c, busy_sessions_by_teacher)
         if reasons:
             rejected[t.teacher_id] = reasons
         else:
@@ -182,7 +182,7 @@ def eligible_teachers_for_class(
 def travel_buffer_reason(
     teacher_id: str,
     cover: ClassSession,
-    regular_classes_by_teacher: dict[str, list[ClassSession]],
+    busy_sessions_by_teacher: dict[str, list[ClassSession]],
     min_gap_min: int = MIN_TRAVEL_GAP_MIN,
 ) -> str | None:
     """
@@ -192,7 +192,7 @@ def travel_buffer_reason(
     - If that closest class is at a DIFFERENT campus, require >= 3h gap.
     - If closest class is SAME campus, it's chill.
     """
-    busy = regular_classes_by_teacher.get(teacher_id, [])
+    busy = busy_sessions_by_teacher.get(teacher_id, [])
     if not busy:
         return None
 
@@ -231,7 +231,7 @@ def travel_buffer_reason(
 def recommended_teachers_for_class(
     teachers_by_id: dict[str, Teacher],
     c: ClassSession,
-    regular_classes_by_teacher: dict[str, list[ClassSession]],
+    busy_sessions_by_teacher: dict[str, list[ClassSession]],
 ) -> tuple[list[str], dict[str, list[str]]]:
     """
     Returns a filtered subset of eligible teachers.
@@ -239,14 +239,14 @@ def recommended_teachers_for_class(
     - Recommendation (soft constraints): travel buffer rule
     """
     eligible, rejected = eligible_teachers_for_class(
-        teachers_by_id, c, regular_classes_by_teacher
+        teachers_by_id, c, busy_sessions_by_teacher
     )
 
     recommended: list[str] = []
     not_recommended: dict[str, list[str]] = {}
 
     for tid in eligible:
-        reason = travel_buffer_reason(tid, c, regular_classes_by_teacher)
+        reason = travel_buffer_reason(tid, c, busy_sessions_by_teacher)
         if reason:
             not_recommended[tid] = [reason]
         else:

@@ -86,3 +86,19 @@ def list_open_covers(con: sqlite3.Connection) -> list[CoverRequest]:
             )
         )
     return out
+
+
+def list_filled_covers(con: sqlite3.Connection) -> list[tuple[str, str, str]]:
+    """
+    Returns: [(cover_id, class_id, assigned_teacher_id), ...] for FILLED covers only
+    """
+    rows = con.execute(
+        """
+        SELECT cover_id, class_id, assigned_teacher_id
+        FROM covers
+        WHERE status = 'FILLED' AND assigned_teacher_id IS NOT NULL
+        ORDER BY id ASC
+        """
+    ).fetchall()
+
+    return [(r["cover_id"], r["class_id"], r["assigned_teacher_id"]) for r in rows]
