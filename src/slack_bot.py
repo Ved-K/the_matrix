@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from cover_time import materialize_for_cover_date
 from csv_loader import load_validated_frames, teachers_from_df, classes_from_df
 from db import get_con, init_db
 
@@ -39,6 +40,10 @@ from cover_dm_repo import (
 from reason_library import match_reasons
 
 load_dotenv()
+
+print("BOT token prefix:", os.environ.get("SLACK_BOT_TOKEN", "")[:5])
+print("APP token prefix:", os.environ.get("SLACK_APP_TOKEN", "")[:5])
+
 
 ASSETS_DIR = Path("assets")
 
@@ -122,12 +127,29 @@ def get_admin_message(con, cover_id: str) -> tuple[str, str] | None:
 # ----------------------------
 # Blocks
 # ----------------------------
+import json
+from cover_time import materialize_for_cover_date
+
+
 def frozen_blocks(text: str) -> list[dict]:
     return [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
 
 
-def teacher_dm_blocks(cover_id: str, c) -> list[dict]:
+def _session_for_cover(cover):
+    """
+    Always render times using the cover's selected date, not the class template date.
+    """
+    template = CLASSES_BY_ID[cover.class_id]
+    return materialize_for_cover_date(template, cover.cover_date)
+
+
+def teacher_dm_blocks(cover) -> list[dict]:
+    """
+    DM sent to a teacher about a cover.
+    """
+    c = _session_for_cover(cover)
     when = fmt_local_range(c.start_at, c.end_at)
+
     return [
         {
             "type": "section",
@@ -149,13 +171,13 @@ def teacher_dm_blocks(cover_id: str, c) -> list[dict]:
                     "text": {"type": "plain_text", "text": "Accept"},
                     "style": "primary",
                     "action_id": "accept_cover",
-                    "value": json.dumps({"cover_id": cover_id}),
+                    "value": json.dumps({"cover_id": cover.cover_id}),
                 },
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": "Decline"},
                     "action_id": "decline_cover",
-                    "value": json.dumps({"cover_id": cover_id}),
+                    "value": json.dumps({"cover_id": cover.cover_id}),
                 },
             ],
         },
@@ -163,7 +185,10 @@ def teacher_dm_blocks(cover_id: str, c) -> list[dict]:
 
 
 def public_cover_blocks(cover, declined_count: int) -> list[dict]:
-    c = CLASSES_BY_ID[cover.class_id]
+    """
+    Public cover card visible to everyone.
+    """
+    c = _session_for_cover(cover)
     when = fmt_local_range(c.start_at, c.end_at)
 
     if cover.status == "FILLED" and cover.assigned_teacher_id:
@@ -218,7 +243,10 @@ def admin_cover_blocks(
     dm_status_by_teacher: dict[str, str],
     declined_ids: set[str],
 ) -> list[dict]:
-    c = CLASSES_BY_ID[cover.class_id]
+    """
+    Coordinator panel (where Notify/Assign controls live).
+    """
+    c = _session_for_cover(cover)
     when = fmt_local_range(c.start_at, c.end_at)
 
     if cover.status == "FILLED" and cover.assigned_teacher_id:
@@ -252,7 +280,7 @@ def admin_cover_blocks(
         {"type": "divider"},
     ]
 
-    # If filled, no notify / assign controls
+    # If filled, keep listing visible but remove controls
     if cover.status != "OPEN":
         blocks.append(
             {
@@ -265,7 +293,7 @@ def admin_cover_blocks(
         )
         return blocks
 
-    # Controls row
+    # Controls row (only coordinators will be able to trigger these actions via your action handlers)
     blocks.append(
         {
             "type": "actions",
@@ -315,7 +343,7 @@ def admin_cover_blocks(
         elif status:
             status_tag = f" — {status}"
 
-        # Keep listing visible even after notified; only remove controls when filled.
+        # Keep listing visible; hide Notify only if declined
         if tid in declined_ids:
             blocks.append(
                 {
@@ -424,76 +452,48 @@ def cover_create(ack, command, client, respond):
     ack()
 
     creator = command["user_id"]
-    origin_channel = command["channel_id"]
-
     if not is_coordinator(creator):
-        # respond is fine here (slash commands)
         respond("Not authorised.")
         return
 
-    class_id = command.get("text", "").strip()
-    if not class_id:
-        respond("Usage: `/cover-create <class_id>`")
-        return
-    if class_id not in CLASSES_BY_ID:
-        respond(f"Unknown class_id: `{class_id}`")
-        return
-
-    con = get_con()
-    init_db(con)
-
-    store = CoverStore.new()
-    cover = store.create_cover(class_id)
-    cover_id = insert_cover(con, cover)
-
-    cover_row = get_cover(con, cover_id)
-    declined = list_declined_teacher_ids(con, cover_id)
-
-    # ✅ Public message ALWAYS goes to the designated public channel
-    posted = client.chat_postMessage(
-        channel=PUBLIC_COVERS_CHANNEL_ID,
-        text=f"Cover {cover_id}",
-        blocks=public_cover_blocks(cover_row, declined_count=len(declined)),
+    client.views_open(
+        trigger_id=command["trigger_id"],
+        view={
+            "type": "modal",
+            "callback_id": "create_cover_modal",
+            "title": {"type": "plain_text", "text": "Create cover"},
+            "submit": {"type": "plain_text", "text": "Create"},
+            "close": {"type": "plain_text", "text": "Cancel"},
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "class_pick",
+                    "label": {"type": "plain_text", "text": "Class"},
+                    "element": {
+                        "type": "external_select",
+                        "action_id": "class_pick_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Search class_id",
+                        },
+                        "min_query_length": 0,
+                    },
+                },
+                {
+                    "type": "input",
+                    "block_id": "date_pick",
+                    "label": {"type": "plain_text", "text": "Cover date"},
+                    "element": {
+                        "type": "datepicker",
+                        "action_id": "date_pick_select",
+                        "placeholder": {"type": "plain_text", "text": "Select date"},
+                    },
+                },
+            ],
+        },
     )
-    upsert_cover_message(con, cover_id, posted["channel"], posted["ts"])
 
-    # Admin panel in coordinator channel (or DM fallback)
-    res = get_recommendations_for_cover(con, cover_id, TEACHERS_BY_ID, CLASSES_BY_ID)
-
-    dm_rows = list_dms_for_cover(con, cover_id)
-    dm_status_by_teacher = {r["teacher_id"]: r["status"] for r in dm_rows}
-
-    admin_blocks = admin_cover_blocks(
-        cover_row, res.recommended, dm_status_by_teacher, declined
-    )
-
-    if COORDINATOR_CHANNEL_ID:
-        admin_post = client.chat_postMessage(
-            channel=COORDINATOR_CHANNEL_ID,
-            text=f"Coordinator panel {cover_id}",
-            blocks=admin_blocks,
-        )
-        upsert_admin_message(con, cover_id, admin_post["channel"], admin_post["ts"])
-    else:
-        dm_channel_id, dm_ts = dm_teacher(
-            client, creator, f"Coordinator panel {cover_id}", admin_blocks
-        )
-        upsert_admin_message(con, cover_id, dm_channel_id, dm_ts)
-
-    con.commit()
-
-    # ✅ Confirm to the coordinator without posting noise in channels
-    # If they ran it somewhere else, tell them where it actually posted.
-    if origin_channel != PUBLIC_COVERS_CHANNEL_ID:
-        client.chat_postEphemeral(
-            channel=origin_channel,
-            user=creator,
-            text=f"Created cover `{cover_id}` for `{class_id}`. Posted publicly in the covers channel.",
-        )
-        # respond to close the slash command nicely
-        respond("Done.")
-    else:
-        respond(f"Created cover `{cover_id}` for `{class_id}`.")
+    respond("Opening cover creator…")
 
 
 # ----------------------------
@@ -718,6 +718,74 @@ def open_assign_modal(ack, body, client, respond):
     )
 
 
+@app.command("/cover-create")
+def cover_create(ack, command, client, respond):
+    ack()
+
+    creator = command["user_id"]
+    if not is_coordinator(creator):
+        respond("Not authorised.")
+        return
+
+    client.views_open(
+        trigger_id=command["trigger_id"],
+        view={
+            "type": "modal",
+            "callback_id": "create_cover_modal",
+            "title": {"type": "plain_text", "text": "Create cover"},
+            "submit": {"type": "plain_text", "text": "Create"},
+            "close": {"type": "plain_text", "text": "Cancel"},
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "class_pick",
+                    "label": {"type": "plain_text", "text": "Class"},
+                    "element": {
+                        "type": "external_select",
+                        "action_id": "class_pick_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Search class_id",
+                        },
+                        "min_query_length": 0,
+                    },
+                },
+                {
+                    "type": "input",
+                    "block_id": "date_pick",
+                    "label": {"type": "plain_text", "text": "Cover date"},
+                    "element": {
+                        "type": "datepicker",
+                        "action_id": "date_pick_select",
+                        "placeholder": {"type": "plain_text", "text": "Select date"},
+                    },
+                },
+            ],
+        },
+    )
+
+    respond("Opening cover creator…")
+
+
+@app.options("class_pick_select")
+def class_pick_options(ack, body):
+    q = (body.get("value") or "").strip().lower()
+
+    options = []
+    for c in CLASSES_BY_ID.values():
+        if not q or q in c.class_id.lower():
+            options.append(
+                {
+                    "text": {"type": "plain_text", "text": c.class_id},
+                    "value": c.class_id,
+                }
+            )
+        if len(options) >= 100:
+            break
+
+    ack(options=options)
+
+
 @app.options("assign_teacher_select")
 def assign_teacher_options(ack, body):
     query = (body.get("value") or "").strip().lower()
@@ -743,6 +811,96 @@ def assign_teacher_options(ack, body):
             break
 
     ack(options=options)
+
+
+@app.view("create_cover_modal")
+def create_cover_modal_submit(ack, body, client, view):
+    ack()
+
+    creator = body["user"]["id"]
+    if not is_coordinator(creator):
+        return
+
+    state = view["state"]["values"]
+    class_id = state["class_pick"]["class_pick_select"]["selected_option"]["value"]
+    cover_date = state["date_pick"]["date_pick_select"]["selected_date"]  # "YYYY-MM-DD"
+
+    if class_id not in CLASSES_BY_ID:
+        client.chat_postEphemeral(
+            channel=COORDINATOR_CHANNEL_ID or body["channel"]["id"],
+            user=creator,
+            text="Invalid class_id.",
+        )
+        return
+
+    # Validate day-of-week now (fail early)
+    from cover_time import materialize_for_cover_date
+
+    template = CLASSES_BY_ID[class_id]
+    try:
+        materialize_for_cover_date(template, cover_date)
+    except Exception as e:
+        client.chat_postEphemeral(
+            channel=COORDINATOR_CHANNEL_ID or body["channel"]["id"],
+            user=creator,
+            text=f"Invalid date for that class: {e}",
+        )
+        return
+
+    con = get_con()
+    init_db(con)
+
+    # ✅ Create + insert cover
+    store = CoverStore.new()  # optional; can delete later
+    cover = store.create_cover(class_id=class_id, cover_date=cover_date)
+    cover_id = insert_cover(con, cover)
+
+    # ✅ Fetch row for formatting blocks
+    cover_row = get_cover(con, cover_id)
+    declined = list_declined_teacher_ids(con, cover_id)
+
+    # ✅ Post public cover card to the public covers channel
+    posted = client.chat_postMessage(
+        channel=PUBLIC_COVERS_CHANNEL_ID,
+        text=f"Cover {cover_id}",
+        blocks=public_cover_blocks(cover_row, declined_count=len(declined)),
+    )
+    upsert_cover_message(con, cover_id, posted["channel"], posted["ts"])
+
+    # ✅ Post coordinator panel
+    res = get_recommendations_for_cover(con, cover_id, TEACHERS_BY_ID, CLASSES_BY_ID)
+    dm_rows = list_dms_for_cover(con, cover_id)
+    dm_status_by_teacher = {r["teacher_id"]: r["status"] for r in dm_rows}
+
+    admin_blocks = admin_cover_blocks(
+        cover_row, res.recommended, dm_status_by_teacher, declined
+    )
+
+    if COORDINATOR_CHANNEL_ID:
+        admin_post = client.chat_postMessage(
+            channel=COORDINATOR_CHANNEL_ID,
+            text=f"Coordinator panel {cover_id}",
+            blocks=admin_blocks,
+        )
+        upsert_admin_message(con, cover_id, admin_post["channel"], admin_post["ts"])
+    else:
+        dm_channel_id, dm_ts = dm_teacher(
+            client, creator, f"Coordinator panel {cover_id}", admin_blocks
+        )
+        upsert_admin_message(con, cover_id, dm_channel_id, dm_ts)
+
+    # Optional: store in-memory (not required)
+    store.open_covers[cover_id] = cover
+    store.all_covers[cover_id] = cover
+
+    con.commit()
+
+    # ✅ Confirmation to coordinator
+    client.chat_postEphemeral(
+        channel=COORDINATOR_CHANNEL_ID or posted["channel"],
+        user=creator,
+        text=f"Created cover `{cover_id}` for `{class_id}` on `{cover_date}`.",
+    )
 
 
 @app.view("assign_modal")
@@ -785,7 +943,10 @@ def assign_modal_submit(ack, body, client, view):
     # Notify assigned teacher by DM (and record it)
     t = TEACHERS_BY_ID.get(teacher_id)
     if t and t.slack_user_id:
-        c = CLASSES_BY_ID[get_cover(con, cover_id).class_id]
+        cover = get_cover(con, cover_id)
+        template = CLASSES_BY_ID[cover.class_id]
+        c = materialize_for_cover_date(template, cover.cover_date)
+
         blocks = frozen_blocks(
             f"You have been assigned to cover `{cover_id}`.\n"
             f"Class: `{c.class_id}`\n"
@@ -1004,7 +1165,9 @@ def accept_cover_action(ack, body, client, respond):
 
             t = TEACHERS_BY_ID.get(teacher_id)
             if t and t.slack_user_id:
-                c = CLASSES_BY_ID[cover.class_id]
+                cover = get_cover(con, cover_id)
+                template = CLASSES_BY_ID[cover.class_id]
+                c = materialize_for_cover_date(template, cover.cover_date)
                 blocks = frozen_blocks(
                     f"Accepted. You are assigned to cover `{cover_id}`.\n"
                     f"Class: `{c.class_id}`\n"

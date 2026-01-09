@@ -13,7 +13,7 @@ def log_attempt(
 ) -> None:
     con.execute(
         """
-        INSERT INTO accept_attempts (cover_id, teacher_id, attempted_at, outcome, reason)
+        INSERT INTO accept_attempts (cover_id, teacher_id, attempted_at, status, reason)
         VALUES (?, ?, ?, ?, ?)
         """,
         (cover_id, teacher_id, attempted_at, outcome, reason),

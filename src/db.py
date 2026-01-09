@@ -24,8 +24,10 @@ def init_db(con: sqlite3.Connection) -> None:
         """
         -- Covers
         CREATE TABLE IF NOT EXISTS covers (
-          cover_id TEXT PRIMARY KEY,
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          cover_id TEXT UNIQUE,
           class_id TEXT NOT NULL,
+          cover_date TEXT NOT NULL,
           status TEXT NOT NULL,                 -- OPEN | FILLED
           created_at TEXT NOT NULL,             -- RFC3339 / ISO string in UTC
           filled_at TEXT,                       -- nullable

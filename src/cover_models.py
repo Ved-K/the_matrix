@@ -11,6 +11,7 @@ CoverStatus = Literal["OPEN", "FILLED", "CANCELLED"]
 class CoverRequest:
     cover_id: str
     class_id: str
+    cover_date: str
     status: CoverStatus
     created_at: datetime
 

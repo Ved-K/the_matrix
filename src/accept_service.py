@@ -1,25 +1,22 @@
 # src/accept_service.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import sqlite3
+from datetime import datetime, timezone
 
 from accept_repo import log_attempt
 from cover_repo import get_cover, fill_cover
+from cover_time import materialize_for_cover_date
 from algorithm import eligibility_reasons
 from models import Teacher, ClassSession
 from reason_library import match_reasons
 
 
 def _friendly(codes: list[str]) -> str:
-    """
-    Turn reason codes into a Slack-friendly bullet list using reason_library.match_reasons.
-    Assumes match_reasons returns list[str]. If you made it return a string, this still handles it.
-    """
-    out = match_reasons(codes)
-    if isinstance(out, str):
-        return out
-    return "\n".join(f"• {x}" for x in out)
+    # Slack-friendly bullets
+    if not codes:
+        return ""
+    return "\n".join(f"• {match_reasons(c)}" for c in codes)
 
 
 def attempt_accept(
@@ -34,10 +31,9 @@ def attempt_accept(
     Returns: (accepted?, message_or_reason)
     Deterministic + explainable.
     """
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     con.execute("BEGIN IMMEDIATE")
-
     try:
         cover = get_cover(con, cover_id)
         if cover is None:
@@ -59,8 +55,18 @@ def attempt_accept(
             con.commit()
             return False, _friendly([code])
 
-        class_session = classes_by_id.get(cover.class_id)
-        if class_session is None:
+        template = classes_by_id.get(cover.class_id)
+        if template is None:
+            code = "class_not_found_for_cover"
+            log_attempt(con, cover_id, teacher_id, ts, "REJECTED", code)
+            con.commit()
+            return False, _friendly([code])
+
+        # Materialize the template onto the requested cover date
+        try:
+            class_session = materialize_for_cover_date(template, cover.cover_date)
+        except Exception:
+            # Keep it minimal: reuse an existing code (or add a new one later)
             code = "class_not_found_for_cover"
             log_attempt(con, cover_id, teacher_id, ts, "REJECTED", code)
             con.commit()
@@ -73,16 +79,17 @@ def attempt_accept(
             con.commit()
             return False, _friendly(reasons)
 
-        ok = fill_cover(con, cover_id, teacher_id)  # no commit inside
+        # Atomic fill: succeeds for exactly one teacher
+        ok = fill_cover(con, cover_id, teacher_id)
         if ok:
             log_attempt(con, cover_id, teacher_id, ts, "ACCEPTED", "")
             con.commit()
-            return True, "✅ accepted"
-        else:
-            code = "already_filled"
-            log_attempt(con, cover_id, teacher_id, ts, "REJECTED", code)
-            con.commit()
-            return False, _friendly([code])
+            return True, "accepted"
+
+        code = "already_filled"
+        log_attempt(con, cover_id, teacher_id, ts, "REJECTED", code)
+        con.commit()
+        return False, _friendly([code])
 
     except Exception:
         con.rollback()
